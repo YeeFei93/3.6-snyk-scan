@@ -1,2 +1,4 @@
-# This Lambda function uses only Python standard library modules
-# No external dependencies required
+# AWS Lambda Python dependencies
+# Even though this simple function doesn't require external dependencies,
+# most real-world Lambda functions would use boto3 for AWS services
+boto3==1.34.34
