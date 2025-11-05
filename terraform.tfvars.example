@@ -1,0 +1,12 @@
+# Example Terraform variables
+# Copy this file to terraform.tfvars and customize as needed
+
+aws_region = "us-east-1"
+function_name = "hello-world-lambda"
+
+tags = {
+  Environment = "dev"
+  Project     = "snyk-scan-demo"
+  ManagedBy   = "terraform"
+  Owner       = "your-name"
+}

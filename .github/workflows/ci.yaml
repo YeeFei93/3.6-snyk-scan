@@ -1,0 +1,117 @@
+name: CI Checks
+run-name: Running Terraform and Security Checks by ${{ github.actor }}
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  Initial-Checks:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Getting initiator name
+      run: echo "Workflow initiated by ${{ github.actor }} from branch ${{ github.ref_name }}"
+
+  terraform-checks:
+    runs-on: ubuntu-latest
+    needs: Initial-Checks
+    outputs:
+      status: ${{ job.status }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Terraform fmt
+      id: fmt
+      run: terraform fmt -check
+
+    - name: Terraform Init
+      id: init
+      run: terraform init
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+
+    - uses: terraform-linters/setup-tflint@v3
+      with:
+        tflint_version: latest
+
+    - name: Show version
+      run: tflint --version
+
+    - name: Init TFLint
+      run: tflint --init
+
+    - name: Run TFLint
+      run: tflint -f compact
+
+  ########################################
+  # Snyk security scans for various checks
+  ########################################
+  snyk-checks:
+    runs-on: ubuntu-latest
+    needs: Initial-Checks
+    outputs:
+      status: ${{ job.status }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Install Snyk CLI
+      run: |
+        npm install -g snyk
+        snyk auth ${{ secrets.SNYK_TOKEN }}
+
+    - name: Snyk Infrastructure as Code test
+      run: snyk iac test --severity-threshold=high
+      continue-on-error: true
+
+    - name: Snyk Code test
+      run: snyk code test --severity-threshold=high
+      continue-on-error: true
+
+    - name: Snyk Open Source test
+      run: snyk test --severity-threshold=high
+      continue-on-error: true
+
+    - name: Snyk Container test (if Dockerfile exists)
+      run: |
+        if [ -f "Dockerfile" ]; then
+          snyk container test . --severity-threshold=high
+        else
+          echo "No Dockerfile found, skipping container scan"
+        fi
+      continue-on-error: true
+
+  summary:
+    runs-on: ubuntu-latest
+    needs: [terraform-checks, snyk-checks]
+    if: always()
+    steps:
+    - name: Workflow Summary
+      run: |
+        echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Terraform Checks | ${{ needs.terraform-checks.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Snyk Security Checks | ${{ needs.snyk-checks.result }} |" >> $GITHUB_STEP_SUMMARY
