@@ -92,11 +92,15 @@ jobs:
 
     - name: Snyk Open Source test
       run: |
-        echo "Running Snyk dependency scan..."
-        snyk test --severity-threshold=high || {
-          echo "Snyk dependency scan completed with issues or no dependencies found"
-          echo "This may be expected for projects with minimal dependencies"
-        }
+        # Check if requirements.txt has actual dependencies (non-comment lines)
+        if [ -f "requirements.txt" ] && grep -v '^#' requirements.txt | grep -v '^[[:space:]]*$' | grep -q .; then
+          echo "Dependencies found, running Snyk dependency scan..."
+          snyk test --severity-threshold=high
+        else
+          echo "No dependencies found in requirements.txt or file is empty."
+          echo "Skipping Snyk dependency scan - this is expected for simple Lambda functions using only standard library."
+          echo "✅ Dependency scan: SKIPPED (No external dependencies)"
+        fi
       continue-on-error: true
 
     - name: Snyk Container test (if Dockerfile exists)
